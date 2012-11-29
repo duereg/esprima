@@ -70,7 +70,7 @@ if (typeof esprima === 'undefined') {
         fs = require('fs');
         esprima = tryGet(require, 'esprima', './esprima.js', '../esprima.js');
     } else if (typeof load === 'function') {
-        tryGet(load, 'esprima.js', '../esprima.js');
+        tryGet(load, '../esprima.js', 'esprima.js');
     }
 }
 
