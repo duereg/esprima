@@ -412,12 +412,9 @@ parseStatement: true, parseSourceElement: true */
 
     function getEscapedIdentifier() {
         var ch, id, type;
-<<<<<<< HEAD
-=======
 
         ch = source.charCodeAt(index++);
         id = String.fromCharCode(ch);
->>>>>>> e88fd530142bb92223192369b243df62f7358b04
 
         // '\u' (char #92, char #117) denotes an escaped character.
         if (ch === 92) {
@@ -426,11 +423,7 @@ parseStatement: true, parseSourceElement: true */
             }
             ++index;
             ch = scanHexEscape('u');
-<<<<<<< HEAD
-            if (!ch || ch === '\\' || !isIdentifierStart(ch)) {
-=======
             if (!ch || ch === '\\' || !isIdentifierStart(ch.charCodeAt(0))) {
->>>>>>> e88fd530142bb92223192369b243df62f7358b04
                 throwError({}, Messages.UnexpectedToken, 'ILLEGAL');
             }
             id = ch;
