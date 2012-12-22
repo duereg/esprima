@@ -28,38 +28,49 @@
 
 var fs, system, esprima, options, fnames, count, formats, formatter, dieLoudly;
 
-if (typeof esprima === 'undefined') {
-    var tryGet = function (method) {
-        var valueToGet, args, path;
-        valueToGet = null;
-        args = [].slice.apply(arguments);
+function tryGetDependency() {
+    var method, args = null;
+    
+    if (typeof require === 'function') {
+        method = require;
+    } else {
+        method = load;
+    }
 
-        if (args.length > 2) {
-            args.unshift();
-            path = args.splice(2, 1)[0];
+    args = [].slice.apply(arguments);
+    args.unshift(method);
 
-            try {
-                valueToGet = method(path);
-            } catch (e) {
-                return tryGet.apply(this, args);
-            }
+    return tryGet.apply(this, args);
+};
+
+function tryGet (method) {
+    var valueToGet, args, path, method;
+    valueToGet = null;
+    args = [].slice.apply(arguments);
+
+    if (args.length > 1) {
+        path = args.splice(1, 1)[0];
+
+        try {
+            valueToGet = method(path);
+        } catch (e) {
+            return tryGet.apply(this, args);
         }
-        return valueToGet;
-    };
+    }
+    return valueToGet;
+};
 
+if (typeof esprima === 'undefined') {
     // PhantomJS can only require() relative files
     if (typeof phantom === 'object') {
         fs = require('fs');
         system = require('system');
         esprima = tryGet(require, './esprima', '../esprima');
-        formats = tryGet(require, 'bin/formats', './formats');
     } else if (typeof require === 'function') {
         fs = require('fs');
         esprima = tryGet(require, 'esprima', './esprima.js', '../esprima.js');
-        formats = tryGet(require, 'formats', 'bin/formats.js', './formats.js');
     } else if (typeof load === 'function') {
-        esprima = tryGet(load, 'esprima.js', '../esprima.js');
-        formats = tryGet(load, 'bin/formats.js', 'formats.js');
+        tryGet(load, '../esprima.js', 'esprima.js');
     }
 }
 
@@ -83,28 +94,15 @@ if (typeof console === 'undefined' && typeof process === 'undefined') {
 }
 
 function showUsage() {
-    var format, availableFormats;
-
     console.log('Usage:');
     console.log('   esvalidate [options] file.js');
     console.log();
     console.log('Available options:');
     console.log();
-
-    console.log(formats);
-
-    availableFormats = null;
-    Object.keys(formats).forEach(function (format) {
-        if (availableFormats === null) {
-            availableFormats = format;
-        } else {
-            availableFormats = availableFormats + ", " + format;
-        }
-    });
-
-    console.log('  --format=type  Set the report format: ' + availableFormats);
-    console.log('  -v, --version  Print program version');
-    console.log('  -q, --quiet    If an error is encountered during parsing, die silently');
+    console.log('  --format=type     Set the report format: plain (default) or junit');
+    console.log('  --formatter=file  Path to a formatter file');
+    console.log('  -v, --version     Print program version');
+    console.log('  -q, --quiet       If an error is encountered during parsing, die silently');
     console.log();
     process.exit(1);
 }
@@ -132,6 +130,9 @@ process.argv.splice(2).forEach(function (entry) {
         dieLoudly = false;
     } else if (entry.slice(0, 9) === '--format=') {
         options.format = entry.slice(9);
+    } else if (entry.slice(0, 12) === '--formatter=') {
+        var formatterPath = entry.slice(12);
+        formatter = tryGetDependency(formatterPath, './' + formatterPath, 'bin/' + formatterPath);
     } else if (entry.slice(0, 2) === '--') {
         console.log('Error: unknown option ' + entry + '.');
         process.exit(1);
@@ -140,9 +141,11 @@ process.argv.splice(2).forEach(function (entry) {
     }
 });
 
-if (formats.hasOwnProperty(options.format)) {
-    formatter = formats[options.format](console.log);
-} else {
+if (!formatter) {
+    formatter = tryGetDependency('./' + options.format + '.js', 'bin/' + options.format + '.js');
+} 
+
+if (!formatter) {
     console.log('Error: unknown report format ' + options.format + '.');
     process.exit(1);
 }
