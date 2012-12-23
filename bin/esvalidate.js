@@ -42,6 +42,7 @@ if(log === undefined) {
 }
 
 function tryGetDependency() {
+    'use strict';
     var method, args = null;
     
     if (typeof require === 'function') {
@@ -54,7 +55,7 @@ function tryGetDependency() {
     args.unshift(method);
 
     return tryGet.apply(this, args);
-};
+}
 
 function tryGet (method) {
     'use strict';
@@ -72,7 +73,7 @@ function tryGet (method) {
         }
     }
     return valueToGet;
-};
+}
 
 if (typeof esprima === 'undefined') {
     // PhantomJS can only require() relative files
@@ -181,6 +182,7 @@ formatter.startLog();
 
 count = 0;
 fnames.forEach(function (fname) {
+    'use strict';
     var content, timestamp, syntax, name, errors, failures, tests, time;
 
     timestamp = Date.now();
