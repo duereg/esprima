@@ -28,49 +28,48 @@
 
 var formatter;
 
-(function() {
-  'use strict';
-  var removeLineNumRegEx = /^Line\ [0-9]*\:\ /;
+(function () {
+    'use strict';
+    var removeLineNumRegEx = /^Line\ [0-9]*\:\ /;
 
-  function padString(amountToPad) {
-    var 
-      paddingCounter = 8 - amountToPad,
-      padding = '', 
-      i;
+    function padString(amountToPad) {
+        var paddingCounter = 8 - amountToPad,
+            padding = '',
+            i;
 
-    for (i = 0; i < paddingCounter; i++) {
-      padding += ' ';
+        for (i = 0; i < paddingCounter; i++) {
+            padding += ' ';
+        }
+
+        return padding;
     }
 
-    return padding;
-  }
+    formatter = function (log) {
+        return {
+            startLog: function () { },
+            startSection: function (fileName, errors, failures, tests, time) {
+                log("[esvalidate file:" + fileName + "]");
+                errors = errors + failures;
 
-  formatter = function(log) {
-    return {
-      startLog: function() { },
-      startSection: function(fileName, errors, failures, tests, time) { 
-        log("[esvalidate file:" + fileName + "]");
-        errors = errors + failures;
-        
-        if(errors > 0) {
-          log(errors + " Error" + (errors > 1 ? "s" : "") + ":");
-        }
-      },
-      writeError: function(fileName, error, errorType) {        
-        var msg = error.message;
-        msg = msg.replace(removeLineNumRegEx, '');
-        if(error.lineNumber && error.column) {
-          log(padString((error.lineNumber.toString() + error.column.toString()).length), error.lineNumber + ',' + error.column + ':', msg);
-        } else {
-          log(msg);
-        }
-      },
-      endSection: function() { },
-      endLog: function() { }
+                if (errors > 0) {
+                    log(errors + " Error" + (errors > 1 ? "s" : "") + ":");
+                }
+            },
+            writeError: function (fileName, error, errorType) {
+                var msg = error.message;
+                msg = msg.replace(removeLineNumRegEx, '');
+                if (error.lineNumber && error.column) {
+                    log(padString((error.lineNumber.toString() + error.column.toString()).length), error.lineNumber + ',' + error.column + ':', msg);
+                } else {
+                    log(msg);
+                }
+            },
+            endSection: function () { },
+            endLog: function () { }
+        };
     };
-  };
 
-  if (typeof module !== 'undefined') {
-    module.exports = formatter;
-  }
-})();
+    if (typeof module !== 'undefined') {
+        module.exports = formatter;
+    }
+}());

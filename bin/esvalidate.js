@@ -37,30 +37,13 @@ if ((log === undefined) && (typeof print === 'function')) {
     log = print;
 }
 
-if(log === undefined) {
+if (log === undefined) {
     throw "Cannot find system to write output to.";
 }
 
-function tryGetDependency() {
-    'use strict';
-    var method, args = null;
-    
-    if (typeof require === 'function') {
-        method = require;
-    } else {
-        method = load;
-    }
-
-    args = [].slice.apply(arguments);
-    args.unshift(method);
-
-    return tryGet.apply(this, args);
-}
-
-function tryGet (method) {
-    'use strict';
-    var args = [].slice.apply(arguments), 
-        valueToGet = null, 
+function tryGet(method) {
+    var args = [].slice.apply(arguments),
+        valueToGet = null,
         path = null;
 
     if (args.length > 1) {
@@ -73,6 +56,21 @@ function tryGet (method) {
         }
     }
     return valueToGet;
+}
+
+function tryGetDependency() {
+    var method, args = null;
+
+    if (typeof require === 'function') {
+        method = require;
+    } else {
+        method = load;
+    }
+
+    args = [].slice.apply(arguments);
+    args.unshift(method);
+
+    return tryGet.apply(this, args);
 }
 
 if (typeof esprima === 'undefined') {
@@ -160,9 +158,9 @@ if (options.format.slice(options.format.length - 3).toLowerCase() !== '.js') {
     options.format = options.format + '.js';
 }
 
-var tempFormatter = tryGetDependency('bin/' + options.format, options.format, './' + options.format );
+var tempFormatter = tryGetDependency('bin/' + options.format, options.format, './' + options.format);
 
-if(!formatter && tempFormatter) {
+if (!formatter && tempFormatter) {
     formatter = tempFormatter;
 }
 
