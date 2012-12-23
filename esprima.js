@@ -411,7 +411,7 @@ parseStatement: true, parseSourceElement: true */
     }
 
     function getEscapedIdentifier() {
-        var ch, id, type;
+        var ch, id;
 
         ch = source.charCodeAt(index++);
         id = String.fromCharCode(ch);
@@ -646,20 +646,17 @@ parseStatement: true, parseSourceElement: true */
             };
         }
 
-        // 2-character punctuators: <= >= == != ++ -- << >> && ||
-        // += -= *= %= &= |= ^= /=
+        // Other 2-character punctuators: ++ -- << >> && ||
 
         if (ch1 === ch2 && ('+-<>&|'.indexOf(ch1) >= 0)) {
-            if ('+-<>&|'.indexOf(ch2) >= 0) {
-                index += 2;
-                return {
-                    type: Token.Punctuator,
-                    value: ch1 + ch2,
-                    lineNumber: lineNumber,
-                    lineStart: lineStart,
-                    range: [start, index]
-                };
-            }
+            index += 2;
+            return {
+                type: Token.Punctuator,
+                value: ch1 + ch2,
+                lineNumber: lineNumber,
+                lineStart: lineStart,
+                range: [start, index]
+            };
         }
 
         if ('<>=!+-*%&|^/'.indexOf(ch1) >= 0) {
@@ -1118,8 +1115,10 @@ parseStatement: true, parseSourceElement: true */
         },
 
         createBinaryExpression: function (operator, left, right) {
+            var type = (operator === '||' || operator === '&&') ? Syntax.LogicalExpression :
+                        Syntax.BinaryExpression;
             return {
-                type: Syntax.BinaryExpression,
+                type: type,
                 operator: operator,
                 left: left,
                 right: right
@@ -1274,15 +1273,6 @@ parseStatement: true, parseSourceElement: true */
                 type: Syntax.Literal,
                 value: token.value,
                 raw: source.slice(token.range[0], token.range[1])
-            };
-        },
-
-        createLogicalExpression: function (operator, left, right) {
-            return {
-                type: Syntax.LogicalExpression,
-                operator: operator,
-                left: left,
-                right: right
             };
         },
 
@@ -1478,6 +1468,7 @@ parseStatement: true, parseSourceElement: true */
             error.column = index - lineStart + 1;
         }
 
+        error.description = msg;
         throw error;
     }
 
@@ -1713,7 +1704,7 @@ parseStatement: true, parseSourceElement: true */
     }
 
     function parseObjectInitialiser() {
-        var properties = [], property, name, kind, map = {}, toString = String;
+        var properties = [], property, name, key, kind, map = {}, toString = String;
 
         expect('{');
 
@@ -1726,8 +1717,10 @@ parseStatement: true, parseSourceElement: true */
                 name = toString(property.key.value);
             }
             kind = (property.kind === 'init') ? PropertyKind.Data : (property.kind === 'get') ? PropertyKind.Get : PropertyKind.Set;
-            if (Object.prototype.hasOwnProperty.call(map, name)) {
-                if (map[name] === PropertyKind.Data) {
+
+            key = '$' + name;
+            if (Object.prototype.hasOwnProperty.call(map, key)) {
+                if (map[key] === PropertyKind.Data) {
                     if (strict && kind === PropertyKind.Data) {
                         throwErrorTolerant({}, Messages.StrictDuplicateProperty);
                     } else if (kind !== PropertyKind.Data) {
@@ -1736,13 +1729,13 @@ parseStatement: true, parseSourceElement: true */
                 } else {
                     if (kind === PropertyKind.Data) {
                         throwErrorTolerant({}, Messages.AccessorDataProperty);
-                    } else if (map[name] & kind) {
+                    } else if (map[key] & kind) {
                         throwErrorTolerant({}, Messages.AccessorGetSet);
                     }
                 }
-                map[name] |= kind;
+                map[key] |= kind;
             } else {
-                map[name] = kind;
+                map[key] = kind;
             }
 
             properties.push(property);
@@ -2080,22 +2073,8 @@ parseStatement: true, parseSourceElement: true */
     // 11.10 Binary Bitwise Operators
     // 11.11 Binary Logical Operators
 
-    // Reduce: make a binary expression from the three topmost entries.
-    function reduceBinary(stack) {
-        var right = stack.pop(),
-            operator = stack.pop().value,
-            left = stack.pop();
-
-
-        if (operator === '||' || operator === '&&') {
-            stack.push(delegate.createLogicalExpression(operator, left, right));
-        } else {
-            stack.push(delegate.createBinaryExpression(operator, left, right));
-        }
-    }
-
     function parseBinaryExpression() {
-        var expr, token, prec, previousAllowIn, stack;
+        var expr, token, prec, previousAllowIn, stack, right, operator, left, i;
 
         previousAllowIn = state.allowIn;
         state.allowIn = true;
@@ -2114,9 +2093,12 @@ parseStatement: true, parseSourceElement: true */
 
         while ((prec = binaryPrecedence(lookahead, previousAllowIn)) > 0) {
 
-            // Reduce.
+            // Reduce: make a binary expression from the three topmost entries.
             while ((stack.length > 2) && (prec <= stack[stack.length - 2].prec)) {
-                reduceBinary(stack);
+                right = stack.pop();
+                operator = stack.pop().value;
+                left = stack.pop();
+                stack.push(delegate.createBinaryExpression(operator, left, right));
             }
 
             // Shift.
@@ -2126,13 +2108,16 @@ parseStatement: true, parseSourceElement: true */
             stack.push(parseUnaryExpression());
         }
 
-        // Final reduce to clean-up the stack.
-        while (stack.length > 1) {
-            reduceBinary(stack);
-        }
-
         state.allowIn = previousAllowIn;
-        return stack[0];
+
+        // Final reduce to clean-up the stack.
+        i = stack.length - 1;
+        expr = stack[i];
+        while (i > 1) {
+            expr = delegate.createBinaryExpression(stack[i - 1].value, stack[i - 2], expr);
+            i -= 2;
+        }
+        return expr;
     }
 
 
@@ -2483,7 +2468,7 @@ parseStatement: true, parseSourceElement: true */
     // 12.7 The continue statement
 
     function parseContinueStatement() {
-        var label = null;
+        var label = null, key;
 
         expectKeyword('continue');
 
@@ -2509,7 +2494,8 @@ parseStatement: true, parseSourceElement: true */
         if (lookahead.type === Token.Identifier) {
             label = parseVariableIdentifier();
 
-            if (!Object.prototype.hasOwnProperty.call(state.labelSet, label.name)) {
+            key = '$' + label.name;
+            if (!Object.prototype.hasOwnProperty.call(state.labelSet, key)) {
                 throwError({}, Messages.UnknownLabel, label.name);
             }
         }
@@ -2526,7 +2512,7 @@ parseStatement: true, parseSourceElement: true */
     // 12.8 The break statement
 
     function parseBreakStatement() {
-        var label = null;
+        var label = null, key;
 
         expectKeyword('break');
 
@@ -2552,7 +2538,8 @@ parseStatement: true, parseSourceElement: true */
         if (lookahead.type === Token.Identifier) {
             label = parseVariableIdentifier();
 
-            if (!Object.prototype.hasOwnProperty.call(state.labelSet, label.name)) {
+            key = '$' + label.name;
+            if (!Object.prototype.hasOwnProperty.call(state.labelSet, key)) {
                 throwError({}, Messages.UnknownLabel, label.name);
             }
         }
@@ -2644,9 +2631,6 @@ parseStatement: true, parseSourceElement: true */
                 break;
             }
             statement = parseStatement();
-            if (typeof statement === 'undefined') {
-                break;
-            }
             consequent.push(statement);
         }
 
@@ -2724,13 +2708,16 @@ parseStatement: true, parseSourceElement: true */
         expectKeyword('catch');
 
         expect('(');
-        if (!match(')')) {
-            param = parseExpression();
-            // 12.14.1
-            if (strict && param.type === Syntax.Identifier && isRestrictedWord(param.name)) {
-                throwErrorTolerant({}, Messages.StrictCatchVariable);
-            }
+        if (match(')')) {
+            throwUnexpected(lookahead);
         }
+
+        param = parseExpression();
+        // 12.14.1
+        if (strict && param.type === Syntax.Identifier && isRestrictedWord(param.name)) {
+            throwErrorTolerant({}, Messages.StrictCatchVariable);
+        }
+
         expect(')');
         body = parseBlock();
         return delegate.createCatchClause(param, body);
@@ -2774,7 +2761,8 @@ parseStatement: true, parseSourceElement: true */
     function parseStatement() {
         var type = lookahead.type,
             expr,
-            labeledBody;
+            labeledBody,
+            key;
 
         if (type === Token.EOF) {
             throwUnexpected(lookahead);
@@ -2834,13 +2822,14 @@ parseStatement: true, parseSourceElement: true */
         if ((expr.type === Syntax.Identifier) && match(':')) {
             lex();
 
-            if (Object.prototype.hasOwnProperty.call(state.labelSet, expr.name)) {
+            key = '$' + expr.name;
+            if (Object.prototype.hasOwnProperty.call(state.labelSet, key)) {
                 throwError({}, Messages.Redeclaration, 'Label', expr.name);
             }
 
-            state.labelSet[expr.name] = true;
+            state.labelSet[key] = true;
             labeledBody = parseStatement();
-            delete state.labelSet[expr.name];
+            delete state.labelSet[key];
             return delegate.createLabeledStatement(expr, labeledBody);
         }
 
@@ -2914,7 +2903,7 @@ parseStatement: true, parseSourceElement: true */
     }
 
     function parseParams(firstRestricted) {
-        var param, params = [], token, stricted, paramSet, message;
+        var param, params = [], token, stricted, paramSet, key, message;
         expect('(');
 
         if (!match(')')) {
@@ -2922,12 +2911,13 @@ parseStatement: true, parseSourceElement: true */
             while (index < length) {
                 token = lookahead;
                 param = parseVariableIdentifier();
+                key = '$' + token.value;
                 if (strict) {
                     if (isRestrictedWord(token.value)) {
                         stricted = token;
                         message = Messages.StrictParamName;
                     }
-                    if (Object.prototype.hasOwnProperty.call(paramSet, token.value)) {
+                    if (Object.prototype.hasOwnProperty.call(paramSet, key)) {
                         stricted = token;
                         message = Messages.StrictParamDupe;
                     }
@@ -2938,13 +2928,13 @@ parseStatement: true, parseSourceElement: true */
                     } else if (isStrictModeReservedWord(token.value)) {
                         firstRestricted = token;
                         message = Messages.StrictReservedWord;
-                    } else if (Object.prototype.hasOwnProperty.call(paramSet, token.value)) {
+                    } else if (Object.prototype.hasOwnProperty.call(paramSet, key)) {
                         firstRestricted = token;
                         message = Messages.StrictParamDupe;
                     }
                 }
                 params.push(param);
-                paramSet[param.name] = true;
+                paramSet[key] = true;
                 if (match(')')) {
                     break;
                 }
@@ -3717,26 +3707,6 @@ parseStatement: true, parseSourceElement: true */
             advance = extra.advance;
             scanRegExp = extra.scanRegExp;
         }
-    }
-
-    // This is used to modify the delegate.
-
-    function extend(object, properties) {
-        var entry, result = {};
-
-        for (entry in object) {
-            if (object.hasOwnProperty(entry)) {
-                result[entry] = object[entry];
-            }
-        }
-
-        for (entry in properties) {
-            if (properties.hasOwnProperty(entry)) {
-                result[entry] = properties[entry];
-            }
-        }
-
-        return result;
     }
 
     function parse(code, options) {
