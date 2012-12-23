@@ -32,16 +32,17 @@ var formatter;
   'use strict';
   var removeLineNumRegEx = /^Line\ [0-9]*\:\ /;
 
-  function numberWang(wangaNumb) {
+  function padString(amountToPad) {
     var 
-      thatsNumberWang = 8 - wangaNumb,
-      stayNumberWang = '', i;
+      paddingCounter = 8 - amountToPad,
+      padding = '', 
+      i;
 
-    for (i = 0; i < thatsNumberWang; i += 1) {
-      stayNumberWang += ' ';
+    for (i = 0; i < paddingCounter; i++) {
+      padding += ' ';
     }
 
-    return stayNumberWang;
+    return padding;
   }
 
   formatter = function(log) {
@@ -59,7 +60,7 @@ var formatter;
         var msg = error.message;
         msg = msg.replace(removeLineNumRegEx, '');
         if(error.lineNumber && error.column) {
-          log(numberWang((error.lineNumber.toString() + error.column.toString()).length), error.lineNumber + ',' + error.column + ':', msg);
+          log(padString((error.lineNumber.toString() + error.column.toString()).length), error.lineNumber + ',' + error.column + ':', msg);
         } else {
           log(msg);
         }
